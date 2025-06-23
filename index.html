@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Tracker V3</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-backdrop.visible { opacity: 1; visibility: visible; }
+        .modal-content {
+            @apply bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200;
+            padding: 2rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            width: 90%; max-width: 500px; transform: scale(0.95); transition: transform 0.3s ease;
+        }
+        .modal-backdrop.visible .modal-content { transform: scale(1); }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+             filter: invert(0.5) brightness(1.2); 
+             cursor: pointer;
+        }
+        html.dark input[type="date"]::-webkit-calendar-picker-indicator { 
+            filter: invert(1) brightness(0.9);
+        }
+        .brand-gradient {
+            @apply bg-gradient-to-r from-blue-600 to-indigo-600;
+        }
+        .update-flash {
+            animation: flash-animation 0.7s ease-out;
+        }
+        @keyframes flash-animation {
+            0% { color: #2563eb; transform: scale(1); }
+            50% { color: #60a5fa; transform: scale(1.1); }
+            100% { color: inherit; transform: scale(1); }
+        }
+    </style>
+    <script>
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-200 transition-colors duration-300">
+
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white/60 dark:bg-gray-900/60 backdrop-blur-md shadow-sm sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="brand-gradient p-2 rounded-lg">
+                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                        </div>
+                        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Production Tracker</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <p id="userIdDisplay" class="text-xs text-gray-500 hidden sm:block"></p>
+                        <button id="theme-toggle" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-50 dark:focus:ring-offset-gray-900 focus:ring-blue-500">
+                            <svg id="theme-toggle-dark-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                            <svg id="theme-toggle-light-icon" class="w-6 h-6 hidden" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Add Form and Controls -->
+                <div class="lg:col-span-1 space-y-8">
+                    <!-- Add New Item Form -->
+                    <div class="bg-white dark:bg-gray-800/50 p-6 rounded-2xl shadow-md">
+                        <h2 class="text-xl font-bold mb-4">Add New Item</h2>
+                        <form id="add-item-form" class="space-y-4">
+                            <div>
+                                <label for="itemName" class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Item Name</label>
+                                <input id="itemName" type="text" placeholder="e.g., Model X Chassis" class="w-full bg-gray-100 dark:bg-gray-700 border-transparent rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" required>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="itemPlan" class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Plan Qty</label>
+                                    <input id="itemPlan" type="number" min="1" placeholder="1000" class="w-full bg-gray-100 dark:bg-gray-700 border-transparent rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" required>
+                                </div>
+                                <div>
+                                    <label for="itemFinishDate" class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Deadline</label>
+                                    <input id="itemFinishDate" type="date" class="w-full bg-gray-100 dark:bg-gray-700 border-transparent rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full brand-gradient bg-blue-800 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center">Add Production Item</button>
+                        </form>
+                    </div>
+
+                     <!-- Data Analysis Dashboard -->
+                    <div class="bg-white dark:bg-gray-800/50 p-6 rounded-2xl shadow-md">
+                        <h2 class="text-xl font-bold mb-4">Data Analysis</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label for="chart-product-select" class="block text-sm font-medium text-gray-600 dark:text-gray-400">Product</label>
+                                <select id="chart-product-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"></select>
+                            </div>
+                            <div>
+                                <label for="chart-range-select" class="block text-sm font-medium text-gray-600 dark:text-gray-400">Date Range</label>
+                                <select id="chart-range-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                    <option value="7">Last 7 Days</option>
+                                    <option value="30" selected>Last 30 Days</option>
+                                    <option value="90">Last 90 Days</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-6 h-64">
+                            <canvas id="productionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Product List -->
+                <div class="lg:col-span-2">
+                    <!-- Search and Export Controls -->
+                    <div class="mb-6 flex flex-col sm:flex-row gap-4">
+                        <div class="relative flex-grow">
+                             <input id="searchInput" type="text" placeholder="Search by item name..." class="w-full bg-white dark:bg-gray-800 border-transparent rounded-lg py-2 pl-10 pr-4 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-sm">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            </div>
+                        </div>
+                         <div class="flex-shrink-0">
+                             <select id="sort-select" class="w-full sm:w-auto h-full bg-white dark:bg-gray-800 border-transparent rounded-lg py-2 pl-3 pr-10 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-sm">
+                                 <option value="createdAt_desc">Newest First</option>
+                                 <option value="createdAt_asc">Oldest First</option>
+                                 <option value="finishDate_asc">By Deadline</option>
+                                 <option value="progress_desc">By Progress</option>
+                             </select>
+                         </div>
+                        <button id="export-btn" class="w-full sm:w-auto bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 shadow-sm hover:bg-green-200 dark:hover:bg-green-800 transition-colors">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <span>Export</span>
+                        </button>
+                    </div>
+
+                    <!-- Product List Container -->
+                    <div id="product-list" class="grid grid-cols-1 xl:grid-cols-2 gap-6"></div>
+                    <div id="status-message" class="text-center text-gray-500 py-10"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Templates and Modals -->
+    <template id="product-card-template">
+        <div class="product-card bg-white dark:bg-gray-800/50 rounded-2xl shadow-md overflow-hidden flex flex-col transition-all duration-300 hover:shadow-lg hover:scale-[1.02]">
+            <div class="p-5 flex-grow">
+                <div class="flex justify-between items-start">
+                    <h3 class="product-name text-lg font-bold text-gray-800 dark:text-white pr-2">Item Name</h3>
+                    <div class="status-indicator flex-shrink-0"></div>
+                </div>
+                <div class="mt-4">
+                    <div class="flex justify-between items-baseline">
+                        <p class="product-produced text-3xl font-extrabold text-blue-600 dark:text-blue-400">0</p>
+                        <p class="product-plan text-base font-medium text-gray-500 dark:text-gray-400">/ 0</p>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                        <div class="progress-bar h-2 rounded-full brand-gradient" style="width: 0%;"></div>
+                    </div>
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-2 gap-4 text-sm">
+                    <div class="flex items-center space-x-2">
+                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs">Deadline</p>
+                            <p class="font-semibold product-finish-date">--</p>
+                        </div>
+                    </div>
+                     <div class="flex items-center space-x-2">
+                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs">Days Left</p>
+                            <p class="font-semibold product-days-remaining">--</p>
+                        </div>
+                    </div>
+                     <div class="flex items-center space-x-2">
+                         <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 6-2-6h4zM4 7l2 6-2 6H2z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10a2 2 0 100-4 2 2 0 000 4z"></path></svg>
+                        <div>
+                            <p class="text-gray-500 dark:text-gray-400 text-xs">Required Avg</p>
+                            <p class="font-semibold required-avg">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-100 dark:bg-gray-800 p-4">
+                 <form class="update-production-form flex flex-col sm:flex-row gap-2 items-center">
+                    <input type="date" class="production-date-input flex-grow p-2 rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 w-full" required>
+                    <input type="number" min="0" placeholder="Qty" class="update-qty-input w-full sm:w-24 p-2 rounded-md bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600" required>
+                    <button type="submit" class="w-full sm:w-auto px-4 py-2 brand-gradient text-white text-sm bg-blue-800 font rounded-md hover:opacity-90 transition">Set</button>
+                </form>
+                 <div class="daily-qty-display mt-2 mb-1 text-xs text-center text-gray-500 dark:text-gray-400"></div>
+                <div class="grid grid-cols-4 gap-2 mt-2">
+                    <button class="notes-btn text-xs py-2 w-full rounded-md bg-gray-200 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition col-span-1">Notes</button>
+                    <button class="edit-btn text-xs py-2 w-full rounded-md bg-gray-200 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition">Edit</button>
+                    <button class="history-btn text-xs py-2 w-full rounded-md bg-gray-200 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition">History</button>
+                    <button class="delete-btn text-xs py-2 w-full rounded-md bg-red-200 text-red-800 hover:bg-red-300 dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900/80 transition">Delete</button>
+                </div>
+            </div>
+        </div>
+    </template>
+    
+    <div id="edit-plan-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4">Edit Production Plan</h3>
+            <form id="edit-plan-form" class="space-y-4">
+                <input type="hidden" id="edit-product-id">
+                <div>
+                    <label for="edit-item-name" class="block text-sm font-medium">Item Name</label>
+                    <input type="text" id="edit-item-name" class="w-full mt-1 p-2 rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600">
+                </div>
+                 <div>
+                    <label for="edit-item-plan" class="block text-sm font-medium">Production Plan (Qty)</label>
+                    <input type="number" id="edit-item-plan" class="w-full mt-1 p-2 rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600">
+                </div>
+                <div>
+                    <label for="edit-item-finish-date" class="block text-sm font-medium">Target Finish Date</label>
+                    <input type="date" id="edit-item-finish-date" class="w-full mt-1 p-2 rounded-md bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600">
+                </div>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" id="edit-modal-cancel-btn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 brand-gradient text-white rounded-lg hover:opacity-90">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="notes-modal" class="modal-backdrop">
+        <div class="modal-content">
+             <h3 class="text-xl font-bold mb-4">Notes for <span id="notes-product-name"></span></h3>
+             <div id="notes-list-container" class="max-h-64 overflow-y-auto pr-2 mb-4 space-y-3 bg-gray-100 dark:bg-gray-900/50 p-3 rounded-lg">
+                 <ul id="notes-list" class="space-y-3"></ul>
+             </div>
+             <form id="add-note-form" class="flex gap-2">
+                 <input id="note-input" type="text" placeholder="Add a new note..." class="flex-grow bg-gray-100 dark:bg-gray-700 border-transparent rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" required>
+                 <button type="submit" class="px-4 py-2 brand-gradient text-white rounded-lg hover:opacity-90">Add</button>
+             </form>
+             <div class="flex justify-end mt-6">
+                 <button id="notes-modal-close-btn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition">Close</button>
+             </div>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal-backdrop">
+        <div class="modal-content">
+             <h3 class="text-xl font-bold mb-4">Plan Change History</h3>
+             <div class="max-h-96 overflow-y-auto pr-2">
+                 <ul id="history-list" class="space-y-3"></ul>
+             </div>
+             <div class="flex justify-end mt-6">
+                 <button id="history-modal-close-btn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition">Close</button>
+             </div>
+        </div>
+    </div>
+
+    <div id="confirmation-modal" class="modal-backdrop">
+        <div class="modal-content">
+             <h3 id="modal-title" class="text-xl font-bold mb-4">Confirm Action</h3>
+             <p id="modal-message" class="mb-6">Are you sure?</p>
+             <div class="flex justify-end gap-4">
+                 <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition">Cancel</button>
+                 <button id="modal-confirm-btn" class="px-4 py-2 text-white rounded-lg">Confirm</button>
+             </div>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="modal-backdrop">
+        <div class="modal-content">
+             <h3 id="alert-title" class="text-xl font-bold mb-4">Alert</h3>
+             <p id="alert-message" class="mb-6">This is an alert message.</p>
+             <div class="flex justify-end">
+                 <button id="alert-ok-btn" class="px-4 py-2 brand-gradient text-white rounded-lg hover:opacity-90">OK</button>
+             </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, serverTimestamp, writeBatch, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Config and Global Vars ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDM_f8B45FW-bVZ0rppP-slyABQt1Ickts",
+            authDomain: "production-tracker-2ae50.firebaseapp.com",
+            databaseURL: "https://production-tracker-2ae50-default-rtdb.firebaseio.com",
+            projectId: "production-tracker-2ae50",
+            storageBucket: "production-tracker-2ae50.appspot.com",
+            messagingSenderId: "413792549321",
+            appId: "1:413792549321:web:1b0abcef911f4c2cee9018",
+            measurementId: "G-12FW1SLTVR"
+        };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        let db, auth, currentUserId = null, productsUnsubscribe = null, notesUnsubscribe = null;
+        let allProducts = [];
+        let productionChart = null;
+
+        // --- DOM Elements ---
+        const addItemForm = document.getElementById('add-item-form');
+        const productList = document.getElementById('product-list');
+        const cardTemplate = document.getElementById('product-card-template');
+        const statusMessage = document.getElementById('status-message');
+        const searchInput = document.getElementById('searchInput');
+        const sortSelect = document.getElementById('sort-select');
+        const exportBtn = document.getElementById('export-btn');
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+        
+        // Modal Elements
+        const editPlanModal = document.getElementById('edit-plan-modal');
+        const editPlanForm = document.getElementById('edit-plan-form');
+        const editModalCancelBtn = document.getElementById('edit-modal-cancel-btn');
+        const historyModal = document.getElementById('history-modal');
+        const historyList = document.getElementById('history-list');
+        const historyModalCloseBtn = document.getElementById('history-modal-close-btn');
+        const notesModal = document.getElementById('notes-modal');
+        const notesList = document.getElementById('notes-list');
+        const addNoteForm = document.getElementById('add-note-form');
+        const notesModalCloseBtn = document.getElementById('notes-modal-close-btn');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const alertModal = document.getElementById('alert-modal');
+        const alertTitle = document.getElementById('alert-title');
+        const alertMessage = document.getElementById('alert-message');
+        const alertOkBtn = document.getElementById('alert-ok-btn');
+
+        // Charting
+        const chartProductSelect = document.getElementById('chart-product-select');
+        const chartRangeSelect = document.getElementById('chart-range-select');
+
+        // --- Utility Functions ---
+        function getTodayString() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        function showStatus(message, isError = false) {
+             const icon = isError 
+                ? `<svg class="w-12 h-12 mx-auto text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+                : `<svg class="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>`;
+            statusMessage.innerHTML = `<div class="text-center py-10">${icon}<p class="mt-4 text-lg ${isError ? 'text-red-500' : 'text-gray-500'}">${message}</p></div>`;
+            statusMessage.style.display = 'block';
+        }
+        
+        function hideStatus() {
+            statusMessage.style.display = 'none';
+        }
+
+        // --- Main App Logic ---
+        function main() {
+            if (!firebaseConfig.apiKey) {
+                showStatus("Application is not configured correctly.", true);
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) handleUserAuthenticated(user.uid);
+                    else {
+                        try {
+                            if(initialAuthToken) await signInWithCustomToken(auth, initialAuthToken);
+                            else await signInAnonymously(auth);
+                        } catch (authError) { console.error("Sign-in error:", authError); }
+                    }
+                });
+            } catch (e) { console.error("Initialization Error:", e); }
+            setupEventListeners();
+            updateThemeUI();
+        }
+        
+        function handleUserAuthenticated(uid) {
+            const targetUID = 'nXRS8MGp0XeWxfQiSG6pP5MkfQu1';
+            if (currentUserId === targetUID) return;
+            currentUserId = targetUID;
+            document.getElementById('userIdDisplay').textContent = `UID: ${targetUID}`;
+            if (productsUnsubscribe) productsUnsubscribe();
+            listenForProducts();
+        }
+
+        // --- Data Fetching ---
+        function listenForProducts() {
+            if (!db || !currentUserId) return;
+            showStatus("Loading production data...");
+            const productsCollectionPath = `artifacts/${appId}/users/${currentUserId}/products`;
+            const q = query(collection(db, productsCollectionPath));
+            
+            productsUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                handleSortAndRender();
+                populateChartFilter();
+                updateChart();
+            }, (error) => {
+                console.error("Firestore error:", error);
+                showStatus("Error loading data. Please check console.", true);
+            });
+        }
+        
+        // --- UI Rendering ---
+        function handleSortAndRender() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const sortValue = sortSelect.value;
+            
+            let sortedProducts = [...allProducts];
+
+            // Sorting logic
+            switch (sortValue) {
+                case 'createdAt_desc':
+                    sortedProducts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                    break;
+                case 'createdAt_asc':
+                    sortedProducts.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                    break;
+                case 'finishDate_asc':
+                    sortedProducts.sort((a, b) => new Date(a.finishDate) - new Date(b.finishDate));
+                    break;
+                case 'progress_desc':
+                    sortedProducts.sort((a, b) => {
+                        const progressA = (a.totalProduced || 0) / (a.plan || 1);
+                        const progressB = (b.totalProduced || 0) / (b.plan || 1);
+                        return progressB - progressA;
+                    });
+                    break;
+            }
+
+            const filteredProducts = sortedProducts.filter(p => p.name.toLowerCase().includes(searchTerm));
+            renderProducts(filteredProducts);
+        }
+
+
+        function renderProducts(productsToRender) {
+            productList.innerHTML = '';
+            if (allProducts.length === 0) {
+                 showStatus("No production items yet. Add one to start tracking!");
+            } else if (productsToRender.length === 0) {
+                 showStatus("No items match your search or filter.");
+            } else {
+                 hideStatus();
+                 productsToRender.forEach(p => productList.appendChild(createProductCard(p)));
+            }
+        }
+        
+        function createProductCard(product) {
+            const card = cardTemplate.content.cloneNode(true).firstElementChild;
+            card.dataset.id = product.id;
+            
+            const totalProduced = product.totalProduced || 0;
+            const plan = product.plan || 0;
+            const finishDate = product.finishDate;
+
+            // Update Text content
+            card.querySelector('.product-name').textContent = product.name;
+            card.querySelector('.product-plan').textContent = `/ ${plan.toLocaleString()}`;
+            const producedEl = card.querySelector('.product-produced');
+            producedEl.textContent = totalProduced.toLocaleString();
+
+            // Update Progress Bar
+            const percentage = plan > 0 ? Math.min((totalProduced / plan) * 100, 100) : 0;
+            card.querySelector('.progress-bar').style.width = `${percentage}%`;
+            
+            // Calculate and display KPIs
+            card.querySelector('.product-finish-date').textContent = finishDate ? new Date(finishDate + 'T00:00:00').toLocaleDateString() : 'N/A';
+            const daysRemainingEl = card.querySelector('.product-days-remaining');
+            const requiredAvgEl = card.querySelector('.required-avg');
+            const statusIndicatorEl = card.querySelector('.status-indicator');
+            
+            if (finishDate) {
+                const deadline = new Date(finishDate + 'T23:59:59');
+                const diffTime = deadline - new Date();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                let status = { text: '', classes: '' };
+
+                if (totalProduced >= plan && plan > 0) {
+                    daysRemainingEl.textContent = 'Done';
+                    requiredAvgEl.textContent = '0';
+                    status = { text: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' };
+                } else if (diffDays >= 0) {
+                    daysRemainingEl.textContent = `${diffDays} days`;
+                    const remainingQty = plan - totalProduced;
+                    const requiredAvg = diffDays > 0 ? Math.ceil(remainingQty / diffDays) : remainingQty;
+                    requiredAvgEl.textContent = requiredAvg.toLocaleString();
+                    status = { text: 'On Track', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' };
+                } else {
+                    daysRemainingEl.textContent = `Overdue`;
+                    requiredAvgEl.textContent = 'N/A';
+                    status = { text: 'Overdue', classes: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' };
+                }
+                
+                statusIndicatorEl.innerHTML = `<div class="text-xs font-medium px-2.5 py-1 rounded-full ${status.classes}">${status.text}</div>`;
+            } else {
+                 daysRemainingEl.textContent = 'N/A';
+                 requiredAvgEl.textContent = 'N/A';
+                 statusIndicatorEl.innerHTML = `<div class="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-300">No Deadline</div>`;
+            }
+
+
+            // Add event listeners
+            card.querySelector('.notes-btn').addEventListener('click', () => showNotesModal(product.id, product.name));
+            card.querySelector('.edit-btn').addEventListener('click', () => openEditModal(product));
+            card.querySelector('.history-btn').addEventListener('click', () => showHistory(product.id));
+            card.querySelector('.delete-btn').addEventListener('click', () => handleDeleteClick(product.id));
+
+            const dateInput = card.querySelector('.production-date-input');
+            dateInput.value = getTodayString();
+            dateInput.addEventListener('change', () => updateDailyQtyDisplay(card, product.id, dateInput.value));
+            updateDailyQtyDisplay(card, product.id, dateInput.value);
+
+            return card;
+        }
+
+        async function updateDailyQtyDisplay(card, productId, dateString) {
+            const display = card.querySelector('.daily-qty-display');
+            const docRef = doc(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/dailyLogs`, dateString);
+            try {
+                const docSnap = await getDoc(docRef);
+                const qty = docSnap.exists() ? docSnap.data().quantity : 0;
+                display.textContent = `Logged for ${new Date(dateString + 'T00:00:00').toLocaleDateString()}: ${qty.toLocaleString()}`;
+                card.querySelector('.update-qty-input').value = qty;
+            } catch (error) {
+                console.error("Error getting daily log:", error);
+                display.textContent = `Could not fetch data for ${dateString}`;
+            }
+        }
+        
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            addItemForm.addEventListener('submit', handleAddItem);
+            productList.addEventListener('submit', handleUpdateProduction);
+            searchInput.addEventListener('input', handleSortAndRender);
+            sortSelect.addEventListener('change', handleSortAndRender);
+            exportBtn.addEventListener('click', handleExport);
+            themeToggleBtn.addEventListener('click', handleThemeToggle);
+            editPlanForm.addEventListener('submit', handleSaveChanges);
+            editModalCancelBtn.addEventListener('click', () => editPlanModal.classList.remove('visible'));
+            historyModalCloseBtn.addEventListener('click', () => historyModal.classList.remove('visible'));
+            notesModalCloseBtn.addEventListener('click', hideNotesModal);
+            addNoteForm.addEventListener('submit', handleAddNote);
+
+            chartProductSelect.addEventListener('change', updateChart);
+            chartRangeSelect.addEventListener('change', updateChart);
+            
+            modalConfirmBtn.addEventListener('click', () => {
+                if (window.confirmCallback) window.confirmCallback();
+                hideConfirmationModal();
+            });
+            modalCancelBtn.addEventListener('click', hideConfirmationModal);
+            alertOkBtn.addEventListener('click', hideAlertModal);
+        }
+
+        // --- Handlers ---
+        async function handleAddItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('itemName').value.trim();
+            const plan = Number(document.getElementById('itemPlan').value);
+            const finishDate = document.getElementById('itemFinishDate').value;
+            if (!name || plan <= 0 || !finishDate) return showAlertModal("Missing Information", "All fields are required.");
+            
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/products`), { 
+                    name, plan, finishDate, totalProduced: 0, 
+                    createdAt: serverTimestamp() 
+                });
+                e.target.reset();
+            } catch (error) {
+                console.error("Error adding item:", error);
+                showAlertModal("Error", "Failed to add new item.");
+            }
+        }
+
+        async function handleUpdateProduction(e) {
+            e.preventDefault();
+            if (!e.target.classList.contains('update-production-form')) return;
+            
+            const card = e.target.closest('.product-card');
+            const productId = card.dataset.id;
+            const date = e.target.querySelector('.production-date-input').value;
+            const newQty = Number(e.target.querySelector('.update-qty-input').value);
+
+            if (newQty < 0 || !date) return showAlertModal("Invalid Input", "Please enter a valid quantity (0 or more) and a date.");
+            
+            const logRef = doc(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/dailyLogs`, date);
+            
+            try {
+                await setDoc(logRef, { quantity: newQty, date }, { merge: true });
+                await recalculateTotal(productId, card);
+            } catch(error) {
+                console.error("Error updating production:", error);
+                showAlertModal("Error", "Failed to update production count.");
+            }
+        }
+        
+        async function recalculateTotal(productId, cardElement) {
+            const logsQuery = query(collection(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/dailyLogs`));
+            const logsSnapshot = await getDocs(logsQuery);
+            const total = logsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0);
+            const productRef = doc(db, `artifacts/${appId}/users/${currentUserId}/products`, productId);
+            await updateDoc(productRef, { totalProduced: total });
+            
+            if (cardElement) {
+                const producedEl = cardElement.querySelector('.product-produced');
+                producedEl.classList.add('update-flash');
+                setTimeout(() => producedEl.classList.remove('update-flash'), 700);
+            }
+        }
+
+
+        function handleDeleteClick(productId) {
+            showConfirmationModal(
+                'Delete Item',
+                'Are you sure you want to delete this item and ALL its data? This cannot be undone.',
+                async () => {
+                    const productRef = doc(db, `artifacts/${appId}/users/${currentUserId}/products`, productId);
+                    try {
+                        // In a real app, you might want to delete subcollections too, which requires more logic.
+                        await deleteDoc(productRef);
+                    } catch (error) {
+                        console.error("Error deleting item:", error);
+                        showAlertModal("Error", "Failed to delete item.");
+                    }
+                },
+                { confirmText: 'Delete', isDestructive: true }
+            );
+        }
+
+        // --- Edit, Notes, and History Logic ---
+        function openEditModal(product) {
+            document.getElementById('edit-product-id').value = product.id;
+            document.getElementById('edit-item-name').value = product.name;
+            document.getElementById('edit-item-plan').value = product.plan;
+            document.getElementById('edit-item-finish-date').value = product.finishDate;
+            editPlanModal.classList.add('visible');
+        }
+
+        async function handleSaveChanges(e) {
+            e.preventDefault();
+            const productId = document.getElementById('edit-product-id').value;
+            const productRef = doc(db, `artifacts/${appId}/users/${currentUserId}/products`, productId);
+            const oldData = allProducts.find(p => p.id === productId);
+
+            const newData = {
+                name: document.getElementById('edit-item-name').value,
+                plan: Number(document.getElementById('edit-item-plan').value),
+                finishDate: document.getElementById('edit-item-finish-date').value,
+            };
+
+            const batch = writeBatch(db);
+            batch.update(productRef, newData);
+            
+            const historyRef = doc(collection(db, productRef.path, 'planHistory'));
+            const changes = {};
+            if(oldData.name !== newData.name) changes.name = { from: oldData.name, to: newData.name };
+            if(oldData.plan !== newData.plan) changes.plan = { from: oldData.plan, to: newData.plan };
+            if(oldData.finishDate !== newData.finishDate) changes.finishDate = { from: oldData.finishDate, to: newData.finishDate };
+            
+            if(Object.keys(changes).length > 0){
+                 batch.set(historyRef, { changedAt: serverTimestamp(), changes });
+            }
+           
+            try {
+                await batch.commit();
+                editPlanModal.classList.remove('visible');
+            } catch (error) {
+                console.error("Error saving changes:", error);
+                showAlertModal("Error", "Failed to save changes.");
+            }
+        }
+
+        function showNotesModal(productId, productName) {
+            if (notesUnsubscribe) notesUnsubscribe();
+
+            document.getElementById('notes-product-name').textContent = productName;
+            addNoteForm.dataset.productId = productId;
+            notesList.innerHTML = '<li>Loading notes...</li>';
+            notesModal.classList.add('visible');
+
+            const notesQuery = query(collection(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/notes`));
+            notesUnsubscribe = onSnapshot(notesQuery, (snapshot) => {
+                notesList.innerHTML = '';
+                 if (snapshot.empty) {
+                    notesList.innerHTML = '<li class="text-center text-gray-500 p-4">No notes yet.</li>';
+                    return;
+                }
+                snapshot.docs
+                    .sort((a,b) => b.data().createdAt.seconds - a.data().createdAt.seconds)
+                    .forEach(doc => {
+                        const note = doc.data();
+                        const li = document.createElement('li');
+                        li.className = "p-3 bg-white dark:bg-gray-700/50 rounded-lg shadow-sm";
+                        const date = note.createdAt ? new Date(note.createdAt.seconds * 1000).toLocaleString() : 'Just now';
+                        li.innerHTML = `<p class="text-sm">${note.text}</p><p class="text-xs text-gray-400 mt-1">${date}</p>`;
+                        notesList.appendChild(li);
+                    });
+            });
+        }
+        
+        function hideNotesModal() {
+            if (notesUnsubscribe) {
+                notesUnsubscribe();
+                notesUnsubscribe = null;
+            }
+            notesModal.classList.remove('visible');
+        }
+
+        async function handleAddNote(e) {
+            e.preventDefault();
+            const productId = e.target.dataset.productId;
+            const noteInput = document.getElementById('note-input');
+            const text = noteInput.value.trim();
+            if (!text || !productId) return;
+            
+            const notesCollection = collection(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/notes`);
+            try {
+                await addDoc(notesCollection, {
+                    text: text,
+                    createdAt: serverTimestamp()
+                });
+                noteInput.value = '';
+            } catch (error) {
+                console.error("Error adding note:", error);
+                showAlertModal("Error", "Could not save note.");
+            }
+        }
+
+
+        async function showHistory(productId) {
+            const historyQuery = query(collection(db, `artifacts/${appId}/users/${currentUserId}/products/${productId}/planHistory`));
+            
+            try {
+                const snapshot = await getDocs(historyQuery);
+                historyList.innerHTML = '';
+                if(snapshot.empty){
+                    historyList.innerHTML = '<li class="p-3 text-center text-gray-500">No changes have been recorded.</li>';
+                } else {
+                    snapshot.docs
+                     .sort((a,b) => b.data().changedAt.seconds - a.data().changedAt.seconds)
+                     .forEach(doc => {
+                         const data = doc.data();
+                         const date = new Date(data.changedAt.seconds * 1000).toLocaleString();
+                         const li = document.createElement('li');
+                         li.className = "p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg";
+
+                         let innerHtml = `<div class="font-semibold text-gray-800 dark:text-gray-200 text-sm">${date}</div><div class="mt-1 pl-2 border-l-2 border-blue-500 space-y-1">`;
+                         for(const [key, value] of Object.entries(data.changes)){
+                             const changeKey = key.charAt(0).toUpperCase() + key.slice(1);
+                             innerHtml += `<div class="text-xs text-gray-600 dark:text-gray-400">${changeKey} changed from <span class="font-medium text-red-500">"${value.from}"</span> to <span class="font-medium text-green-500">"${value.to}"</span></div>`;
+                         }
+                         innerHtml += `</div>`;
+                         li.innerHTML = innerHtml;
+                         historyList.appendChild(li);
+                     });
+                }
+                historyModal.classList.add('visible');
+            } catch(error) {
+                console.error("Error fetching history:", error);
+                showAlertModal("Error", "Could not load history.");
+            }
+        }
+        
+        // --- Charting Logic ---
+        function populateChartFilter() {
+            const currentVal = chartProductSelect.value;
+            chartProductSelect.innerHTML = '<option value="all">All Products</option>';
+            allProducts.forEach(p => {
+                const option = document.createElement('option');
+                option.value = p.id;
+                option.textContent = p.name;
+                chartProductSelect.appendChild(option);
+            });
+            if(Array.from(chartProductSelect.options).some(opt => opt.value === currentVal)) {
+                chartProductSelect.value = currentVal;
+            } else {
+                 chartProductSelect.value = 'all';
+            }
+        }
+
+        async function updateChart() {
+            const productId = chartProductSelect.value;
+            const range = Number(chartRangeSelect.value);
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - (range - 1));
+            startDate.setHours(0,0,0,0);
+
+            const labels = [];
+            const aggregatedData = {};
+            for (let i = 0; i < range; i++) {
+                const d = new Date(startDate);
+                d.setDate(d.getDate() + i);
+                const dateString = d.toISOString().split('T')[0];
+                labels.push(dateString);
+                aggregatedData[dateString] = 0;
+            }
+
+            const productsToQuery = productId === 'all' ? allProducts : allProducts.filter(p => p.id === productId);
+
+            for (const product of productsToQuery) {
+                if (!product) continue;
+                const logsQuery = query(
+                    collection(db, `artifacts/${appId}/users/${currentUserId}/products/${product.id}/dailyLogs`),
+                    where("date", ">=", labels[0]),
+                    where("date", "<=", labels[labels.length - 1])
+                );
+                const snapshot = await getDocs(logsQuery);
+                snapshot.forEach(doc => {
+                    const log = doc.data();
+                    if(aggregatedData[log.date] !== undefined) {
+                        aggregatedData[log.date] += log.quantity;
+                    }
+                });
+            }
+
+            const data = labels.map(label => aggregatedData[label]);
+            renderProductionChart(labels, data);
+        }
+
+        function renderProductionChart(labels, data) {
+            const ctx = document.getElementById('productionChart').getContext('2d');
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            const labelColor = isDark ? '#d1d5db' : '#374151';
+
+            if (productionChart) {
+                productionChart.destroy();
+            }
+            productionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Quantity Produced',
+                        data: data,
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: labelColor } },
+                        x: { grid: { display: false }, ticks: { color: labelColor } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+
+        // --- Other Handlers ---
+        async function handleExport() {
+            if (allProducts.length === 0) {
+                return showAlertModal("No Data", "There is nothing to export.");
+            }
+            showStatus("Generating report...");
+
+            const headers = ["Item Name", "Date", "Quantity", "Production Plan", "Target Finish Date", "Total Produced"];
+            const csvRows = [headers.join(',')];
+            
+            try {
+                for (const product of allProducts) {
+                    const logsCollection = collection(db, `artifacts/${appId}/users/${currentUserId}/products/${product.id}/dailyLogs`);
+                    const logsSnapshot = await getDocs(query(logsCollection));
+                    if (logsSnapshot.empty) {
+                        const row = [`"${product.name.replace(/"/g, '""')}"`, "N/A", 0, product.plan, product.finishDate || 'N/A', product.totalProduced || 0];
+                        csvRows.push(row.join(','));
+                    } else {
+                        logsSnapshot.forEach(logDoc => {
+                            const log = logDoc.data();
+                            const row = [`"${product.name.replace(/"/g, '""')}"`, log.date, log.quantity, product.plan, product.finishDate || 'N/A', product.totalProduced || 0];
+                            csvRows.push(row.join(','));
+                        });
+                    }
+                }
+                downloadCsv(csvRows.join('\r\n'), 'production_export.csv');
+                showAlertModal("Export Successful", "Your production data has been prepared for download.");
+            } catch(error) {
+                console.error("Export Error:", error);
+                showAlertModal("Error", "An error occurred during the export.");
+            } finally {
+                hideStatus();
+            }
+        }
+
+        function downloadCsv(csvString, filename) {
+            const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        function handleThemeToggle() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.theme = isDark ? 'dark' : 'light';
+            updateThemeUI();
+            if(productionChart) updateChart();
+        }
+        function updateThemeUI() {
+            if (document.documentElement.classList.contains('dark')) {
+                themeToggleLightIcon.classList.remove('hidden');
+                themeToggleDarkIcon.classList.add('hidden');
+            } else {
+                themeToggleLightIcon.classList.add('hidden');
+                themeToggleDarkIcon.classList.remove('hidden');
+            }
+        }
+        
+        // --- Modal Logic ---
+        function showConfirmationModal(title, message, onConfirm, options = {}) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            window.confirmCallback = onConfirm;
+
+            modalConfirmBtn.textContent = options.confirmText || 'Confirm';
+            modalCancelBtn.textContent = options.cancelText || 'Cancel';
+
+            modalConfirmBtn.className = 'px-4 py-2 text-white rounded-lg transition';
+            const colorClass = options.isDestructive ? 'bg-red-600 hover:bg-red-700' : 'brand-gradient hover:opacity-90';
+            modalConfirmBtn.classList.add(...colorClass.split(' '));
+
+            confirmationModal.classList.add('visible');
+        }
+
+        function hideConfirmationModal() {
+            confirmationModal.classList.remove('visible');
+            window.confirmCallback = null;
+        }
+
+        function showAlertModal(title, message) {
+            alertTitle.textContent = title;
+            alertMessage.textContent = message;
+            alertModal.classList.add('visible');
+        }
+
+        function hideAlertModal() {
+            alertModal.classList.remove('visible');
+        }
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
+</body>
+</html>
