@@ -579,17 +579,42 @@
             const name = document.getElementById('itemName').value.trim();
             const plan = Number(document.getElementById('itemPlan').value);
             const finishDate = document.getElementById('itemFinishDate').value;
-            if (!name || plan <= 0 || !finishDate) return showAlertModal("Missing Information", "All fields are required.");
-            
+        
+            if (!name || plan <= 0 || !finishDate) {
+                return showAlertModal("Missing Information", "All fields are required.");
+            }
+        
             try {
-                await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/products`), { 
-                    name, plan, finishDate, totalProduced: 0, 
+                // Define the collection reference
+                const productsCollectionRef = collection(db, `artifacts/${appId}/users/${currentUserId}/products`);
+        
+                // 1. Create a query to find documents where the 'name' field matches the input
+                const q = query(productsCollectionRef, where("name", "==", name));
+        
+                // 2. Execute the query to check for duplicates
+                const querySnapshot = await getDocs(q);
+        
+                // 3. Check if the query returned any documents
+                if (!querySnapshot.empty) {
+                    // If querySnapshot is not empty, a duplicate exists.
+                    showAlertModal("Duplicate Item", `An item named "${name}" already exists. Please use a different name.`);
+                    return; // Stop the function from proceeding
+                }
+        
+                // If we reach this point, no duplicate was found, so we can add the new item.
+                await addDoc(productsCollectionRef, { 
+                    name, 
+                    plan, 
+                    finishDate, 
+                    totalProduced: 0, 
                     createdAt: serverTimestamp() 
                 });
-                e.target.reset();
+        
+                e.target.reset(); // Clear the form
+        
             } catch (error) {
                 console.error("Error adding item:", error);
-                showAlertModal("Error", "Failed to add new item.");
+                showAlertModal("Error", "Failed to check for duplicates or add the new item.");
             }
         }
 
@@ -972,3 +997,4 @@
     </script>
 </body>
 </html>
+
